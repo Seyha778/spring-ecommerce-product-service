@@ -9,6 +9,7 @@ import com.apextech.productservice.model.request.ProductListRequest;
 import com.apextech.productservice.model.request.ProductUpdateRequest;
 import com.apextech.productservice.model.response.ListResponse;
 import com.apextech.productservice.model.response.ProductResponse;
+import com.apextech.productservice.repository.ProductCategoryRepository;
 import com.apextech.productservice.repository.ProductRepository;
 import com.apextech.productservice.service.ProductService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.util.List;
 public class ProductServiceImpl implements ProductService {
 
     private final ProductRepository productRepository;
+    private final ProductCategoryRepository productCategoryRepository;
 
     @Override
     @Transactional
@@ -44,12 +46,12 @@ public class ProductServiceImpl implements ProductService {
         }
 
         // validate category
-//        if (productRepository.existsByProductCode(request.getProductCode())) {
-//            throw new ResponseStatusException(
-//                    HttpStatus.BAD_REQUEST,
-//                    "Product code already exists:" + request.getProductCode()
-//            );
-//        }
+        if (!productCategoryRepository.existsByCategoryCode(request.getCategoryId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Product Category code not exists:" + request.getProductCode()
+            );
+        }
 
         ProductEntity product = ProductEntity.builder()
                 .productCode(request.getProductCode())
