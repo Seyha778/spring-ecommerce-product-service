@@ -12,6 +12,7 @@ import com.apextech.productservice.model.response.ProductResponse;
 import com.apextech.productservice.repository.ProductCategoryRepository;
 import com.apextech.productservice.repository.ProductRepository;
 import com.apextech.productservice.service.ProductService;
+import com.apextech.productservice.utils.NumberGeneratorUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,11 +38,12 @@ public class ProductServiceImpl implements ProductService {
     @Transactional
     public ProductResponse create(ProductCreateRequest request) {
 
+        String productCode = generateProductNumber();
         // validate product code
-        if (productRepository.existsByProductCode(request.getProductCode())) {
+        if (productRepository.existsByProductCode(productCode)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Product code already exists:" + request.getProductCode()
+                    "Product code already exists:" + productCode
             );
         }
 
@@ -49,12 +51,12 @@ public class ProductServiceImpl implements ProductService {
         if (!productCategoryRepository.existsByCategoryCode(request.getCategoryId())) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Product Category code not exists:" + request.getProductCode()
+                    "Product Category code not exists:" + request.getCategoryId()
             );
         }
 
         ProductEntity product = ProductEntity.builder()
-                .productCode(request.getProductCode())
+                .productCode(productCode)
                 .productName(request.getProductName())
                 .slug(generateSlug(request.getProductName()))
                 .categoryId(request.getCategoryId())
@@ -119,6 +121,13 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product not found: " + productId
                 ));
+    }
+
+    private String generateProductNumber() {
+        return NumberGeneratorUtil.generate(
+                "PRD",
+                productRepository.nextProductSequence()
+        );
     }
 
     @Override

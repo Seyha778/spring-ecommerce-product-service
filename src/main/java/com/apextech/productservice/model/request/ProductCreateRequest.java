@@ -20,7 +20,6 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class ProductCreateRequest {
 
-    @NotBlank(message = "Product code is required")
     @Size(max = 50)
     @JsonProperty("product_code")
     private String productCode;

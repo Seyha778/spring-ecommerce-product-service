@@ -12,6 +12,7 @@ import com.apextech.productservice.model.response.ProductCategoryResponse;
 import com.apextech.productservice.repository.ProductCategoryRepository;
 import com.apextech.productservice.repository.ProductRepository;
 import com.apextech.productservice.service.ProductCategoryService;
+import com.apextech.productservice.utils.NumberGeneratorUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -30,23 +31,23 @@ import java.util.List;
 @Slf4j
 public class ProductCategoryServiceImpl implements ProductCategoryService {
 
-    private final ProductRepository productRepository;
     private final ProductCategoryRepository productCategoryRepository;
 
     @Override
     @Transactional
     public ProductCategoryResponse create(ProductCategoryCreateRequest request) {
 
+        String categoryCode = generateProductNumber();
         // validate product code
-        if (productCategoryRepository.existsByCategoryCode(request.getCategoryCode())) {
+        if (productCategoryRepository.existsByCategoryCode(categoryCode)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Category code already exists:" + request.getCategoryCode()
+                    "Category code already exists:" + categoryCode
             );
         }
 
         ProductCategoryEntity productCategory = ProductCategoryEntity.builder()
-                .categoryCode(request.getCategoryCode())
+                .categoryCode(categoryCode)
                 .categoryName(request.getCategoryName())
                 .description(request.getDescription())
                 .parentCategoryId(request.getParentCategoryId())
@@ -153,4 +154,10 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
                 .build();
     }
 
+    private String generateProductNumber() {
+        return NumberGeneratorUtil.generate(
+                "CAT",
+                productCategoryRepository.nextCategorySequence()
+        );
+    }
 }

@@ -4,6 +4,7 @@ import com.apextech.productservice.entity.ProductEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -16,4 +17,10 @@ public interface ProductRepository extends JpaRepository<ProductEntity, Long> {
     boolean existsBySlug(String slug);
 
     Page<ProductEntity> findAllByOrderByIdDesc(Pageable pageable);
+
+    @Query(value = """
+        SELECT nextval('ecommerce.product_number_seq')
+        """, nativeQuery = true)
+    Long nextProductSequence();
+
 }
