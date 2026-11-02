@@ -36,66 +36,86 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
     @Override
     @Transactional
     public ProductCategoryResponse create(ProductCategoryCreateRequest request) {
+        try{
+            String categoryCode = generateProductNumber();
+            // validate product code
+            if (productCategoryRepository.existsByCategoryCode(categoryCode)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Category code already exists:" + categoryCode
+                );
+            }
 
-        String categoryCode = generateProductNumber();
-        // validate product code
-        if (productCategoryRepository.existsByCategoryCode(categoryCode)) {
+            ProductCategoryEntity productCategory = ProductCategoryEntity.builder()
+                    .categoryCode(categoryCode)
+                    .categoryName(request.getCategoryName())
+                    .description(request.getDescription())
+                    .parentCategoryId(request.getParentCategoryId())
+                    .imageUrl(request.getImageUrl())
+                    .displayOrder(request.getDisplayOrder())
+                    .createdOn(OffsetDateTime.now())
+                    .build();
+
+            ProductCategoryEntity savedProduct = productCategoryRepository.save(productCategory);
+
+            log.info("Product Category created successfully. Product Code: {}", savedProduct.getCategoryCode());
+
+            return toResponse(savedProduct);
+        } catch (Exception e) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Category code already exists:" + categoryCode
+                    "Exception error:" + e.getMessage()
             );
         }
-
-        ProductCategoryEntity productCategory = ProductCategoryEntity.builder()
-                .categoryCode(categoryCode)
-                .categoryName(request.getCategoryName())
-                .description(request.getDescription())
-                .parentCategoryId(request.getParentCategoryId())
-                .imageUrl(request.getImageUrl())
-                .displayOrder(request.getDisplayOrder())
-                .createdOn(OffsetDateTime.now())
-                .build();
-
-        ProductCategoryEntity savedProduct = productCategoryRepository.save(productCategory);
-
-        log.info("Product Category created successfully. Product Code: {}", savedProduct.getCategoryCode());
-
-        return toResponse(savedProduct);
     }
 
     @Override
     @Transactional
     public ProductCategoryResponse update(ProductCategoryUpdateRequest request) {
+        try{
+            ProductCategoryEntity category = getProductCategory(request.getCategoryCode());
 
-        ProductCategoryEntity category = getProductCategory(request.getCategoryCode());
+            category.setCategoryCode(request.getCategoryCode());
+            category.setCategoryName(request.getCategoryName());
+            category.setParentCategoryId(request.getParentCategoryId());
+            category.setDescription(request.getDescription());
+            category.setDisplayOrder(request.getDisplayOrder());
+            category.setImageUrl(request.getImageUrl());
+            category.setStatus(request.getStatus());
+            category.setModifiedOn(OffsetDateTime.now());
 
-        category.setCategoryCode(request.getCategoryCode());
-        category.setCategoryName(request.getCategoryName());
-        category.setParentCategoryId(request.getParentCategoryId());
-        category.setDescription(request.getDescription());
-        category.setDisplayOrder(request.getDisplayOrder());
-        category.setImageUrl(request.getImageUrl());
-        category.setStatus(request.getStatus());
-        category.setModifiedOn(OffsetDateTime.now());
+            ProductCategoryEntity updatedCategory = productCategoryRepository.save(category);
 
-        ProductCategoryEntity updatedCategory = productCategoryRepository.save(category);
+            log.info("Product Category updated successfully. Category Code: {}", updatedCategory.getCategoryCode());
 
-        log.info("Product Category updated successfully. Category Code: {}", updatedCategory.getCategoryCode());
+            return toResponse(updatedCategory);
 
-        return toResponse(updatedCategory);
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
+        }
     }
 
     @Override
     public void delete(ProductCategoryDeleteRequest request) {
-        String categoryCode = request.getCategoryCode();
-        ProductCategoryEntity deletedProduct = productCategoryRepository.findFirstByCategoryCode(categoryCode)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product Category not found: " + categoryCode
-                ));
-        deletedProduct.setStatus(CategoryStatusEnum.CD.getValue());
-        productCategoryRepository.save(deletedProduct);
+        try{
+            String categoryCode = request.getCategoryCode();
+            ProductCategoryEntity deletedProduct = productCategoryRepository.findFirstByCategoryCode(categoryCode)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product Category not found: " + categoryCode
+                    ));
+            deletedProduct.setStatus(CategoryStatusEnum.CD.getValue());
+            productCategoryRepository.save(deletedProduct);
 
-        log.info("Product Category deleted successfully. Category Code: {}", categoryCode);
+            log.info("Product Category deleted successfully. Category Code: {}", categoryCode);
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
+        }
     }
 
     private ProductCategoryEntity getProductCategory(String categoryCode) {
@@ -109,33 +129,39 @@ public class ProductCategoryServiceImpl implements ProductCategoryService {
     @Override
     @Transactional(readOnly = true)
     public ListResponse<ProductCategoryResponse> list(ProductListRequest request) {
+        try{
+            int page = request.getPage() == null ? 0 : request.getPage();
+            int size = request.getSize() == null ? 10 : request.getSize();
 
-        int page = request.getPage() == null ? 0 : request.getPage();
-        int size = request.getSize() == null ? 10 : request.getSize();
+            if (page < 0) {
+                throw new ResourceNotFoundException("Page must not be negative");
+            }
 
-        if (page < 0) {
-            throw new ResourceNotFoundException("Page must not be negative");
+            if (size < 1 || size > 100) {
+                throw new ResourceNotFoundException("Page size must be between 1 and 100");
+            }
+
+            Pageable pageable = PageRequest.of(page, size);
+            Page<ProductCategoryEntity> list = productCategoryRepository.findAllByOrderByIdDesc(pageable);
+
+            log.info("Total data size:{}", list.getSize());
+
+            List<ProductCategoryResponse> content = list.getContent()
+                    .stream()
+                    .map(this::toResponse)
+                    .toList();
+
+            return ListResponse.<ProductCategoryResponse>builder()
+                    .content(content)
+                    .totalElements(list.getTotalElements())
+                    .totalPages(list.getTotalPages())
+                    .build();
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
         }
-
-        if (size < 1 || size > 100) {
-            throw new ResourceNotFoundException("Page size must be between 1 and 100");
-        }
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ProductCategoryEntity> list = productCategoryRepository.findAllByOrderByIdDesc(pageable);
-
-        log.info("Total data size:{}", list.getSize());
-
-        List<ProductCategoryResponse> content = list.getContent()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-
-        return ListResponse.<ProductCategoryResponse>builder()
-                .content(content)
-                .totalElements(list.getTotalElements())
-                .totalPages(list.getTotalPages())
-                .build();
     }
 
     private ProductCategoryResponse toResponse(ProductCategoryEntity category) {

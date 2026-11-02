@@ -37,82 +37,140 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse create(ProductCreateRequest request) {
+        try{
+            String productCode = generateProductNumber();
+            // validate product code
+            if (productRepository.existsByProductCode(productCode)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Product code already exists:" + productCode
+                );
+            }
 
-        String productCode = generateProductNumber();
-        // validate product code
-        if (productRepository.existsByProductCode(productCode)) {
+            // validate category
+            if (!productCategoryRepository.existsByCategoryCode(request.getCategoryId())) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Product Category code not exists:" + request.getCategoryId()
+                );
+            }
+
+            ProductEntity product = ProductEntity.builder()
+                    .productCode(productCode)
+                    .productName(request.getProductName())
+                    .slug(generateSlug(request.getProductName()))
+                    .categoryId(request.getCategoryId())
+                    .brandName(request.getBrandName())
+                    .description(request.getDescription())
+                    .price(request.getPrice())
+                    .compareAtPrice(request.getCompareAtPrice())
+                    .currency(request.getCurrency().toUpperCase())
+                    .productStatus(request.getProductStatus())
+                    .isFeatured(Boolean.TRUE.equals(request.getIsFeatured()))
+                    .createdOn(OffsetDateTime.now())
+                    .build();
+
+            ProductEntity savedProduct = productRepository.save(product);
+
+            log.info("Product created successfully. Product Code: {}", savedProduct.getProductCode());
+
+            return toResponse(savedProduct);
+        }catch(Exception e){
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Product code already exists:" + productCode
+                    "Exception error:" + e.getMessage()
             );
         }
-
-        // validate category
-        if (!productCategoryRepository.existsByCategoryCode(request.getCategoryId())) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Product Category code not exists:" + request.getCategoryId()
-            );
-        }
-
-        ProductEntity product = ProductEntity.builder()
-                .productCode(productCode)
-                .productName(request.getProductName())
-                .slug(generateSlug(request.getProductName()))
-                .categoryId(request.getCategoryId())
-                .brandName(request.getBrandName())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .compareAtPrice(request.getCompareAtPrice())
-                .currency(request.getCurrency().toUpperCase())
-                .productStatus(request.getProductStatus())
-                .isFeatured(Boolean.TRUE.equals(request.getIsFeatured()))
-                .createdOn(OffsetDateTime.now())
-                .build();
-
-        ProductEntity savedProduct = productRepository.save(product);
-
-        log.info("Product created successfully. Product Code: {}", savedProduct.getProductCode());
-
-        return toResponse(savedProduct);
     }
 
     @Override
     @Transactional
     public ProductResponse update(ProductUpdateRequest request) {
+        try{
+            ProductEntity product = getProduct(request.getProductCode());
 
-        ProductEntity product = getProduct(request.getProductCode());
+            product.setProductName(request.getProductName());
+            product.setSlug(generateSlug(request.getProductName()));
+            product.setCategoryId(request.getCategoryId());
+            product.setBrandName(request.getBrandName());
+            product.setDescription(request.getDescription());
+            product.setPrice(request.getPrice());
+            product.setCompareAtPrice(request.getCompareAtPrice());
+            product.setCurrency(request.getCurrency().toUpperCase());
+            product.setProductStatus(request.getProductStatus());
+            product.setFeatured(request.getIsFeatured());
+            product.setModifiedOn(OffsetDateTime.now());
 
-        product.setProductName(request.getProductName());
-        product.setSlug(generateSlug(request.getProductName()));
-        product.setCategoryId(request.getCategoryId());
-        product.setBrandName(request.getBrandName());
-        product.setDescription(request.getDescription());
-        product.setPrice(request.getPrice());
-        product.setCompareAtPrice(request.getCompareAtPrice());
-        product.setCurrency(request.getCurrency().toUpperCase());
-        product.setProductStatus(request.getProductStatus());
-        product.setFeatured(request.getIsFeatured());
-        product.setModifiedOn(OffsetDateTime.now());
+            ProductEntity updatedProduct = productRepository.save(product);
 
-        ProductEntity updatedProduct = productRepository.save(product);
+            log.info("Product updated successfully. Product Code: {}", updatedProduct.getProductCode());
 
-        log.info("Product updated successfully. Product Code: {}", updatedProduct.getProductCode());
-
-        return toResponse(updatedProduct);
+            return toResponse(updatedProduct);
+        }catch(Exception e){
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
+        }
     }
 
     @Override
     public void delete(ProductDeleteRequest request) {
-        String productCode = request.getProductCode();
-        ProductEntity deletedProduct = productRepository.findFirstByProductCode(productCode)
-                .orElseThrow(() -> new ResourceNotFoundException(
-                        "Product not found: " + productCode
-                ));
-        deletedProduct.setProductStatus(ProductStatusEnum.PD.getValue());
-        productRepository.save(deletedProduct);
+        try {
+            String productCode = request.getProductCode();
+            ProductEntity deletedProduct = productRepository.findFirstByProductCode(productCode)
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product not found: " + productCode
+                    ));
+            deletedProduct.setProductStatus(ProductStatusEnum.PD.getValue());
+            productRepository.save(deletedProduct);
 
-        log.info("Product deleted successfully. Product Code: {}", productCode);
+            log.info("Product deleted successfully. Product Code: {}", productCode);
+
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ListResponse<ProductResponse> list(ProductListRequest request) {
+        try {
+            int page = request.getPage() == null ? 0 : request.getPage();
+            int size = request.getSize() == null ? 10 : request.getSize();
+
+            if (page < 0) {
+                throw new ResourceNotFoundException("Page must not be negative");
+            }
+
+            if (size < 1 || size > 100) {
+                throw new ResourceNotFoundException("Page size must be between 1 and 100");
+            }
+
+            Pageable pageable = PageRequest.of(page, size);
+            Page<ProductEntity> list = productRepository.findAllByOrderByIdDesc(pageable);
+
+            log.info("Total data size:{}", list.getSize());
+
+            List<ProductResponse> content = list.getContent()
+                    .stream()
+                    .map(this::toResponse)
+                    .toList();
+
+            return ListResponse.<ProductResponse>builder()
+                    .content(content)
+                    .totalElements(list.getTotalElements())
+                    .totalPages(list.getTotalPages())
+                    .build();
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Exception error:" + e.getMessage()
+            );
+        }
     }
 
     private ProductEntity getProduct(String productId) {
@@ -130,37 +188,6 @@ public class ProductServiceImpl implements ProductService {
         );
     }
 
-    @Override
-    @Transactional(readOnly = true)
-    public ListResponse<ProductResponse> list(ProductListRequest request) {
-
-        int page = request.getPage() == null ? 0 : request.getPage();
-        int size = request.getSize() == null ? 10 : request.getSize();
-
-        if (page < 0) {
-            throw new ResourceNotFoundException("Page must not be negative");
-        }
-
-        if (size < 1 || size > 100) {
-            throw new ResourceNotFoundException("Page size must be between 1 and 100");
-        }
-
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ProductEntity> list = productRepository.findAllByOrderByIdDesc(pageable);
-
-        log.info("Total data size:{}", list.getSize());
-
-        List<ProductResponse> content = list.getContent()
-                .stream()
-                .map(this::toResponse)
-                .toList();
-
-        return ListResponse.<ProductResponse>builder()
-                .content(content)
-                .totalElements(list.getTotalElements())
-                .totalPages(list.getTotalPages())
-                .build();
-    }
 
     private ProductResponse toResponse(ProductEntity product) {
         return ProductResponse.builder()
